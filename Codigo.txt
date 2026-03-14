@@ -1,17 +1,131 @@
-const inputRut = await esperarElemento('input.st-form-control__input');
+(async function automatizadorWOB() {
+    // ==========================================
+    // FUNCIONES DE UTILIDAD (El "Motor" del script)
+    // ==========================================
+
+    // 1. Esperar a que un elemento aparezca en pantalla (hasta 10 segundos)
+    const esperarElemento = (selector, timeout = 10000) => {
+        return new Promise((resolve, reject) => {
+            const interval = setInterval(() => {
+                const el = document.querySelector(selector);
+                if (el) { clearInterval(interval); resolve(el); }
+            }, 200);
+            setTimeout(() => { clearInterval(interval); reject(`Timeout: No se encontró ${selector}`); }, timeout);
+        });
+    };
+
+    // 2. Pausa pequeña para dejar que Angular respire entre clics
+    const pausa = (ms = 500) => new Promise(r => setTimeout(r, ms));
+
+    // 3. Verificar si campos están vacíos y pausar el script si es necesario
+    const verificarCamposYPausar = async (selectoresAValidar, mensaje) => {
+        let faltaData = false;
+        for (let selector of selectoresAValidar) {
+            const el = document.querySelector(selector);
+            // Si el elemento no existe o su valor está vacío/es nulo
+            if (!el || !el.value || el.value.trim() === '') {
+                faltaData = true;
+                break; // Con uno que falte, detenemos
+            }
+        }
+        
+        if (faltaData) {
+            console.warn(`⚠️ Pausa manual requerida: ${mensaje}`);
+            // El alert o confirm detiene la ejecución del JavaScript hasta que el usuario responda
+            confirm(`Faltan datos en pantalla.\n\nPor favor, rellénalos manualmente.\n\nCuando termines, haz clic en "Aceptar" para que el robot continúe.`);
+        }
+    };
+
+    // ==========================================
+    // INICIO DEL FLUJO AUTOMÁTICO
+    // ==========================================
+    try {
+        console.log("🚀 Iniciando automatización WOB...");
+
+        // PASO 1: Selección de Cliente (Persona natural con giro)
+        /* COMENTADO: Asumo que ya estás en la pantalla del RUT manualmente
+        const btnPersonaNatural = await esperarElemento('.btn-persona-natural');
+        btnPersonaNatural.click();
+        await pausa(500);
+        */
+
+        // PASO 2: Leer portapapeles y pegar RUT
+        let textoPortapapeles = "";
+        
+        console.log("⏳ Tienes 2 segundos para hacer clic en el fondo de Getnet...");
+        await pausa(2000); // Te da 2 segundos para devolverle el foco a la web
+
+        try {
+            // Intenta leer el portapapeles de forma invisible
+            textoPortapapeles = await navigator.clipboard.readText();
+        } catch (err) {
+            // Si falla por seguridad (no hiciste clic a tiempo), lanza la caja manual
+            console.warn("⚠️ Seguridad del navegador bloqueó el portapapeles. Usando modo manual.");
+            textoPortapapeles = prompt("Pega el RUT del cliente aquí:");
+        }
+
+        if (!textoPortapapeles) throw new Error("No se ingresó ningún RUT. Cancelando automatización.");
+        
+        const rutLimpio = textoPortapapeles.replace(/[\.\-\s]/g, '');
+        if (rutLimpio.length < 7) throw new Error("RUT inválido.");
+        
+        // Seleccionar LegalSign
+        const radioLegalSign = await esperarElemento('input[ng-reflect-value="P"]');
+        radioLegalSign.click();
+        radioLegalSign.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // Inyectar RUT
+        const inputRut = await esperarElemento('input.st-form-control__input');
         inputRut.value = rutLimpio;
         inputRut.dispatchEvent(new Event('input', { bubbles: true }));
         inputRut.dispatchEvent(new Event('change', { bubbles: true }));
         
-        // --- AQUÍ ESTÁ EL CAMBIO ---
+        // --- CORRECCIÓN DE VELOCIDAD PARA ANGULAR ---
         console.log("⏳ Dejando que Angular procese el RUT...");
-        await pausa(1000); // 1 segundo completo de pausa
+        await pausa(1000); // 1 segundo para que el botón se habilite bien
         
         const btnContinuar = await esperarElemento('button.st-btn--red');
         btnContinuar.click();
-        console.log("✅ RUT inyectado y Avanzando...");
+        console.log("✅ Clic en Continuar. Esperando la nueva pantalla...");
 
-        await pausa(1500); // Dar tiempo a que la pantalla cambie antes de buscar el checkbox de la página 3
-        // ---------------------------
+        await pausa(1500); // 1.5 segundos para dar tiempo a que la página 3 cargue
+        // ---------------------------------------------
 
-        // PASO 3: Condiciones y Actividad...
+        // PASO 3: Condiciones y Actividad (Foto 3)
+        // Hacer clic en el checkbox "He leído las condiciones"
+        const chkCondiciones = await esperarElemento('input[type="checkbox"]'); // <- Ajusta si hay más de un checkbox
+        if(!chkCondiciones.checked) chkCondiciones.click();
+        
+        // Validar si el rubro está vacío. Si está vacío, pausa y te pide llenarlo.
+        await verificarCamposYPausar(['#input-actividad-economica'], "Elige la actividad económica");
+        
+        // Asumiendo que hay un botón de Siguiente en esta pantalla
+        // const btnSiguienteActividad = await esperarElemento('button.siguiente');
+        // btnSiguienteActividad.click();
+
+        // PASO 4: Datos del Comercio (Foto 5)
+        console.log("⏳ Revisando Datos del Comercio...");
+        await esperarElemento('input[type="email"]'); // Esperamos que cargue la pantalla
+        
+        const selectoresDatosComercio = ['input[type="email"]', 'input[type="tel"]'];
+        await verificarCamposYPausar(selectoresDatosComercio, "Faltan datos de contacto del cliente.");
+        
+        const btnSiguienteDatos = await esperarElemento('button.st-btn--red');
+        btnSiguienteDatos.click();
+        console.log("✅ Datos del comercio listos.");
+
+        // PASO 5: Dirección del comercio (Foto 6)
+        console.log("⏳ Revisando Dirección...");
+        const selectoresDireccion = ['#input-comuna', '#input-calle', '#input-numero']; // <- ¡CAMBIAR!
+        await verificarCamposYPausar(selectoresDireccion, "Falta completar la dirección.");
+        
+        const btnGuardarContinuar = await esperarElemento('button.st-btn--red');
+        btnGuardarContinuar.click();
+        console.log("✅ Dirección lista.");
+
+        console.log("🎉 ¡Automatización finalizada con éxito!");
+
+    } catch (error) {
+        console.error("❌ Se detuvo la automatización: ", error);
+    }
+})();
