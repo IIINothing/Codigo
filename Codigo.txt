@@ -2,31 +2,52 @@
         const radioLegalSign = await esperarElemento('input[ng-reflect-value="P"]');
         radioLegalSign.click();
         radioLegalSign.dispatchEvent(new Event('change', { bubbles: true }));
-        await pausa(300); // Pequeño respiro entre clics
+        await pausa(300);
         
         // Inyectar RUT
         const inputRut = await esperarElemento('input.st-form-control__input');
+        inputRut.focus(); 
         inputRut.value = rutLimpio;
         inputRut.dispatchEvent(new Event('input', { bubbles: true }));
         inputRut.dispatchEvent(new Event('change', { bubbles: true }));
-        inputRut.dispatchEvent(new Event('blur', { bubbles: true })); // ⚡ TRUCO: Simula que saliste del input para forzar la validación
+        inputRut.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter' }));
+        inputRut.blur();  
+        inputRut.dispatchEvent(new Event('focusout', { bubbles: true })); // Extra para Angular
         
-        console.log("⏳ Esperando que Angular habilite el botón Continuar...");
-        const btnContinuar = await esperarElemento('button.st-btn--red');
+        console.log("⏳ Buscando el botón VISIBLE de Continuar...");
+        await pausa(1000); 
         
-        // --- BUCLE INTELIGENTE: Esperar hasta que el botón deje de estar 'disabled' ---
+        // --- BÚSQUEDA INTELIGENTE DE ELEMENTOS VISIBLES ---
+        const todosLosBotones = document.querySelectorAll('button');
+        let btnContinuar = null;
+        for (let btn of todosLosBotones) {
+            const textoBoton = btn.textContent.trim().toUpperCase();
+            // Buscamos que diga CONTINUAR y que offsetParent NO sea null (que no esté oculto)
+            if (textoBoton.includes('CONTINUAR') && btn.offsetParent !== null) {
+                btnContinuar = btn;
+                break;
+            }
+        }
+        
+        if (!btnContinuar) throw new Error("No se encontró ningún botón visible que diga CONTINUAR.");
+
+        // Esperar a que se quite el 'disabled'
         let intentos = 0;
         while (btnContinuar.disabled && intentos < 20) {
-            await pausa(250); // Revisar cada cuarto de segundo
+            await pausa(250);
             intentos++;
         }
         
-        if (btnContinuar.disabled) throw new Error("El botón nunca se habilitó. Revisa el RUT.");
+        if (btnContinuar.disabled) throw new Error("El botón CONTINUAR nunca se habilitó.");
 
-        await pausa(500); // Un respiro mínimo de medio segundo por seguridad
-        btnContinuar.click();
-        console.log("✅ Clic en Continuar ejecutado de forma segura.");
+        await pausa(500); 
+        
+        // --- SÚPER CLIC ---
+        btnContinuar.focus(); // Ponemos el foco en el botón
+        btnContinuar.click(); // Clic nativo
+        btnContinuar.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })); // Simulamos apretar Enter
+        
+        console.log("✅ Súper Clic en Continuar ejecutado. Esperando nueva pantalla...");
 
-        console.log("⏳ Esperando que cargue la nueva pantalla...");
-        await pausa(2000); // 2 segundos completos para que cargue la página 3
+        await pausa(2500); // 2.5 segundos para que cargue la página 3
         // ------------------------------------------------------------------
