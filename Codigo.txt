@@ -1,0 +1,17 @@
+const inputRut = await esperarElemento('input.st-form-control__input');
+        inputRut.value = rutLimpio;
+        inputRut.dispatchEvent(new Event('input', { bubbles: true }));
+        inputRut.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // --- AQUÍ ESTÁ EL CAMBIO ---
+        console.log("⏳ Dejando que Angular procese el RUT...");
+        await pausa(1000); // 1 segundo completo de pausa
+        
+        const btnContinuar = await esperarElemento('button.st-btn--red');
+        btnContinuar.click();
+        console.log("✅ RUT inyectado y Avanzando...");
+
+        await pausa(1500); // Dar tiempo a que la pantalla cambie antes de buscar el checkbox de la página 3
+        // ---------------------------
+
+        // PASO 3: Condiciones y Actividad...
